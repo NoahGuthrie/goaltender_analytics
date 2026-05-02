@@ -61,7 +61,7 @@ goaltender_analytics/
 ├── dashboard/             # Interactive web dashboard (Vite + D3.js)
 ├── notebooks/             # Exploratory analysis & methodology development
 ├── tests/                 # Unit & integration tests
-├── docs/                  # Methodology papers & writeups
+├── docs/                  # Methodology writeups
 └── data/                  # Local data storage (not tracked by git)
     ├── raw/               # Immutable API responses (Parquet)
     ├── processed/         # Feature-engineered tables
@@ -103,7 +103,7 @@ NHL EDGE (scraped)      ──→  JSON  ──→  Parquet (raw/)
                                               │
                                 ┌─────────────┼─────────────────┐
                                 │             │                 │
-                          Player Cards   Dashboard API   Methodology Paper
+                          Player Cards   Dashboard API   Methodology Writeup
 ```
 
 **Coverage:** 19 NHL seasons (2007–08 through 2025–26) · ~24,000+ games · ~500,000+ shots on goal
@@ -170,7 +170,6 @@ python -m src.viz.player_cards --season 2025
 
 - [x] Project structure & infrastructure
 - [ ] NHL API data ingestion pipeline (play-by-play + shifts)
-- [ ] NHL EDGE data scraper
 - [ ] Feature engineering pipeline
 - [ ] Baseline xG model (logistic regression)
 - [ ] Enhanced xG model (CatBoost with full feature set)
@@ -181,8 +180,9 @@ python -m src.viz.player_cards --season 2025
 - [ ] Kalman filter projection system
 - [ ] Goalie player cards (static images)
 - [ ] Interactive web dashboard
-- [ ] Methodology paper
-- [ ] Backtesting & validation report
+- [ ] NHL EDGE data scraper (Advanced Tracking Metrics)
+- [ ] Methodology writeups
+- [ ] Backtesting report
 
 ## Contributing
 
