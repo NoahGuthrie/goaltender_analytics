@@ -1,0 +1,4 @@
+# Data directory
+# Raw and processed data files are stored here locally.
+# These files are NOT tracked by git (see .gitignore).
+# Run the ingestion pipeline to populate this directory.
