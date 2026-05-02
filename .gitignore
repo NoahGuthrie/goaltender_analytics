@@ -225,6 +225,7 @@ __marimo__/
 data/raw/
 data/processed/
 data/models/
+data/checkpoints/
 *.parquet
 *.duckdb
 *.duckdb.wal
