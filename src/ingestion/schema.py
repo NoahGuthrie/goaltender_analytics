@@ -96,7 +96,7 @@ def _load_table(conn: duckdb.DuckDBPyConnection, table_name: str, glob_path: str
 
     sql = f"""
         CREATE OR REPLACE TABLE {table_name} AS
-        SELECT * FROM read_parquet('{glob_path}', hive_partitioning=true)
+        SELECT * FROM read_parquet('{glob_path}', hive_partitioning=true, union_by_name=true)
     """
     conn.execute(sql)
     count = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]

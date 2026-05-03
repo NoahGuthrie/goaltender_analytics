@@ -36,9 +36,17 @@ def train_baseline(data_path="data/processed/xg_features.parquet", model_dir="da
     numeric_features = ['shot_distance', 'shot_angle']
     categorical_features = ['shot_type']
     
+    from sklearn.impute import SimpleImputer
+    from sklearn.pipeline import Pipeline as SklearnPipeline
+    
+    numeric_transformer = SklearnPipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler())
+    ])
+    
     preprocessor = ColumnTransformer(
         transformers=[
-            ('num', StandardScaler(), numeric_features),
+            ('num', numeric_transformer, numeric_features),
             ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
         ],
         remainder='passthrough' # For is_empty_net

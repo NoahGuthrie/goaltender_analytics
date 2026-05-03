@@ -23,12 +23,13 @@ def train_catboost(data_path="data/processed/xg_features.parquet", model_dir="da
     features = [
         'shot_distance', 'shot_angle', 'shot_type', 'is_empty_net',
         'time_since_last_event', 'prev_event_type', 'sequence_2_events',
-        'shot_sequence_num', 'traffic_density', 'royal_road_cross'
+        'shot_sequence_num', 'traffic_density', 'royal_road_cross',
+        'time_since_last_stoppage', 'strength_state'
     ]
     target = 'is_goal'
     
     # Identify categorical features for CatBoost
-    cat_features = ['shot_type', 'prev_event_type', 'sequence_2_events']
+    cat_features = ['shot_type', 'prev_event_type', 'sequence_2_events', 'strength_state']
     
     # Cast categoricals to string (CatBoost requires string or int for categoricals)
     for col in cat_features:
@@ -44,17 +45,33 @@ def train_catboost(data_path="data/processed/xg_features.parquet", model_dir="da
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=stratify)
     
     logger.info("Training CatBoost Context-Enriched model...")
-    # Initialize CatBoostClassifier
-    # symmetric trees (depth=6), handles imbalance via auto_class_weights
-    clf = CatBoostClassifier(
-        iterations=500,
-        depth=6,
-        learning_rate=0.05,
-        cat_features=cat_features,
-        auto_class_weights='Balanced',
-        verbose=100,
-        random_state=42
-    )
+    
+    # Load tuned parameters if they exist
+    import json
+    params_path = Path("data/models/tune/best_catboost_params.json")
+    if params_path.exists():
+        logger.info(f"Loading tuned parameters from {params_path}")
+        with open(params_path, 'r') as f:
+            best_params = json.load(f)
+        clf = CatBoostClassifier(
+            iterations=500,
+            auto_class_weights='Balanced',
+            cat_features=cat_features,
+            verbose=100,
+            random_state=42,
+            **best_params
+        )
+    else:
+        logger.info("Using default parameters...")
+        clf = CatBoostClassifier(
+            iterations=500,
+            depth=6,
+            learning_rate=0.05,
+            cat_features=cat_features,
+            auto_class_weights='Balanced',
+            verbose=100,
+            random_state=42
+        )
     
     clf.fit(X_train, y_train, eval_set=(X_test, y_test), early_stopping_rounds=50)
     
