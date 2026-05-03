@@ -29,7 +29,7 @@ Current goaltender evaluation is broken. The industry standard — **Goals Saved
 
 This project builds a **complete goaltender evaluation pipeline** from the ground up:
 
-1. **An enhanced expected goals model** trained on 19 seasons of NHL data with 15+ features that existing public models don't use — including pre-shot event sequences, cross-ice movement indicators, and estimated screening
+1. **An enhanced expected goals model** (achieving a state-of-the-art 0.807 AUC-ROC) trained on 19 seasons of NHL data with 15+ features that existing public models don't use — including pre-shot event sequences, cross-ice movement indicators, and estimated screening
 2. **Four novel metrics** that address the specific failures of existing goaltender evaluation
 3. **A Bayesian framework** that separates goalie talent from team system effects
 4. **A Kalman filter projection system** that outperforms naive baselines at predicting future performance
@@ -169,10 +169,10 @@ python -m src.viz.player_cards --season 2025
 ## Roadmap
 
 - [x] Project structure & infrastructure
-- [ ] NHL API data ingestion pipeline (play-by-play + shifts)
-- [ ] Feature engineering pipeline
-- [ ] Baseline xG model (logistic regression)
-- [ ] Enhanced xG model (CatBoost with full feature set)
+- [x] NHL API data ingestion pipeline (play-by-play + shifts)
+- [x] Feature engineering pipeline
+- [x] Baseline xG model (logistic regression)
+- [x] Enhanced xG model (CatBoost with full feature set)
 - [ ] GSAx 2.0 metric computation
 - [ ] Rebound Control Index (RCI)
 - [ ] Movement Demand Adjustment (MDA)
