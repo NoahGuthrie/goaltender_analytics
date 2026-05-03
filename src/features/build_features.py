@@ -48,6 +48,12 @@ def build_xg_features(db_path="data/goaltender_analytics.duckdb", output_path="d
                 0 -- Default to start of period if no faceoff recorded
             ) as last_stoppage_time,
             
+            -- Score tracking for score differential
+            COALESCE(SUM(CASE WHEN p.event_type = 'goal' AND p.event_owner_team_id = p.home_team_id THEN 1 ELSE 0 END) 
+                OVER (PARTITION BY p.game_id ORDER BY p.event_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) as home_goals,
+            COALESCE(SUM(CASE WHEN p.event_type = 'goal' AND p.event_owner_team_id = p.away_team_id THEN 1 ELSE 0 END) 
+                OVER (PARTITION BY p.game_id ORDER BY p.event_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) as away_goals,
+            
             COUNT(CASE WHEN p.event_type IN ('shot-on-goal', 'goal') THEN 1 END) 
                 OVER (PARTITION BY p.game_id ORDER BY CAST(SPLIT_PART(p.time_in_period, ':', 1) AS INT) * 60 + CAST(SPLIT_PART(p.time_in_period, ':', 2) AS INT) RANGE BETWEEN 4 PRECEDING AND 1 PRECEDING) as shot_sequence_num,
             
@@ -104,6 +110,25 @@ def build_xg_features(db_path="data/goaltender_analytics.duckdb", output_path="d
                                 
     df['time_since_last_event'] = df['time_seconds'] - df['prev_time_seconds']
     df['time_since_last_stoppage'] = df['time_seconds'] - df['last_stoppage_time']
+    
+    # Fill NA sequence events first so np.where doesn't crash on pd.NA
+    df['time_since_last_event'] = df['time_since_last_event'].fillna(999).astype(float)
+    df['time_since_last_stoppage'] = df['time_since_last_stoppage'].fillna(999).astype(float)
+    df['prev_x'] = df['prev_x'].fillna(89).astype(float) # Default prev location to net to avoid NA math
+    df['prev_y'] = df['prev_y'].fillna(0).astype(float)
+    
+    # New final features
+    df['prev_distance'] = np.sqrt((df['net_x'] - df['prev_x'])**2 + df['prev_y']**2)
+    df['prev_angle'] = np.where(df['prev_distance'] > 0, np.abs(np.arcsin(df['prev_y'] / df['prev_distance'])) * 180 / np.pi, 0)
+    df['delta_angle'] = np.abs(df['shot_angle'] - df['prev_angle']).fillna(0)
+    
+    df['distance_from_prev'] = np.sqrt((df['x_coord'] - df['prev_x'])**2 + (df['y_coord'] - df['prev_y'])**2)
+    df['puck_speed'] = np.where(df['time_since_last_event'] > 0, df['distance_from_prev'] / df['time_since_last_event'], 0)
+    df['puck_speed'] = df['puck_speed'].fillna(0)
+    
+    df['score_differential'] = np.where(df['event_owner_team_id'] == df['home_team_id'], 
+                                        df['home_goals'] - df['away_goals'], 
+                                        df['away_goals'] - df['home_goals'])
     
     # Compute strength state (e.g., 5v5, 5v4) from goalie's perspective
     def get_strength_state(row):

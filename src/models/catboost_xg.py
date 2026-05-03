@@ -24,7 +24,8 @@ def train_catboost(data_path="data/processed/xg_features.parquet", model_dir="da
         'shot_distance', 'shot_angle', 'shot_type', 'is_empty_net',
         'time_since_last_event', 'prev_event_type', 'sequence_2_events',
         'shot_sequence_num', 'traffic_density', 'royal_road_cross',
-        'time_since_last_stoppage', 'strength_state'
+        'time_since_last_stoppage', 'strength_state',
+        'score_differential', 'puck_speed', 'delta_angle'
     ]
     target = 'is_goal'
     
