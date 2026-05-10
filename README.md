@@ -177,7 +177,7 @@ python -m src.viz.player_cards --season 2025
 - [x] Rebound Control Index (RCI)
 - [x] Movement Demand Adjustment (MDA)
 - [x] Defensive System Impact Score (DSIS) — Bayesian hierarchical model
-- [ ] Kalman filter projection system
+- [x] Kalman filter projection system
 - [ ] Goalie player cards (static images)
 - [ ] Interactive web dashboard
 - [ ] NHL EDGE data scraper (Advanced Tracking Metrics)
