@@ -173,10 +173,10 @@ python -m src.viz.player_cards --season 2025
 - [x] Feature engineering pipeline
 - [x] Baseline xG model (logistic regression)
 - [x] Enhanced xG model (CatBoost with full feature set)
-- [ ] GSAx 2.0 metric computation
-- [ ] Rebound Control Index (RCI)
-- [ ] Movement Demand Adjustment (MDA)
-- [ ] Defensive System Impact Score (DSIS) — Bayesian hierarchical model
+- [x] GSAx 2.0 metric computation
+- [x] Rebound Control Index (RCI)
+- [x] Movement Demand Adjustment (MDA)
+- [x] Defensive System Impact Score (DSIS) — Bayesian hierarchical model
 - [ ] Kalman filter projection system
 - [ ] Goalie player cards (static images)
 - [ ] Interactive web dashboard
