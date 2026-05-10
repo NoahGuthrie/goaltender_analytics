@@ -135,13 +135,17 @@ def calculate_age_curves(
     """
     seasonal_df = conn.execute(query).df()
     
-    # Load DSIS Team Effects to isolate pure goalie talent
+    # Load DSIS Team Effects (now time-varying: one effect per team-season)
     team_effects_path = "data/processed/dsis_team_effects.parquet"
     try:
         dsis_teams = pd.read_parquet(team_effects_path)
-        seasonal_df = seasonal_df.merge(dsis_teams[['team_id', 'dsis_team_defense_impact_per_game']], on='team_id', how='left')
+        # Merge on BOTH team_id AND season for time-varying effects
+        seasonal_df = seasonal_df.merge(
+            dsis_teams[['team_id', 'season', 'dsis_team_defense_impact_per_game']], 
+            on=['team_id', 'season'], how='left'
+        )
         seasonal_df['dsis_team_defense_impact_per_game'] = seasonal_df['dsis_team_defense_impact_per_game'].fillna(0)
-        logger.info("Successfully merged DSIS Team Effects for True Talent isolation.")
+        logger.info("Successfully merged time-varying DSIS Team-Season Effects for True Talent isolation.")
     except FileNotFoundError:
         logger.warning("DSIS Team Effects not found! Using raw GSAx 2.0 without team isolation.")
         seasonal_df['dsis_team_defense_impact_per_game'] = 0

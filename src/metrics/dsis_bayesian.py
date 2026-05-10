@@ -56,12 +56,19 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
     team_idx, teams = pd.factorize(df['team_id'])
     season_idx, seasons = pd.factorize(df['season'])
     
+    # TIME-VARYING TEAM EFFECT: Create a compound (team, season) index
+    # This allows the Rangers' 2025-26 collapse to be captured separately
+    # from their historically elite defense
+    df['team_season'] = df['team_id'].astype(str) + '_' + df['season'].astype(str)
+    team_season_idx, team_seasons = pd.factorize(df['team_season'])
+    
     n_goalies = len(goalies)
     n_teams = len(teams)
     n_seasons = len(seasons)
+    n_team_seasons = len(team_seasons)
     n_obs = len(df)
     
-    logger.info(f"Model dimensions: {n_goalies} goalies, {n_teams} teams, {n_seasons} seasons, {n_obs} observations")
+    logger.info(f"Model dimensions: {n_goalies} goalies, {n_teams} teams, {n_seasons} seasons, {n_team_seasons} team-seasons, {n_obs} observations")
     
     logger.info("Defining PyMC Hierarchical Model (DSIS)...")
     
@@ -74,7 +81,7 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
         with pm.Model() as dsis_model:
             # Data containers
             idx_goalie = pm.Data("idx_goalie", goalie_idx)
-            idx_team = pm.Data("idx_team", team_idx)
+            idx_team_season = pm.Data("idx_team_season", team_season_idx)
             idx_season = pm.Data("idx_season", season_idx)
             traffic = pm.Data("traffic", df['traffic_std'].values)
             speed = pm.Data("speed", df['speed_std'].values)
@@ -86,24 +93,25 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
             
             # Random Effects — using shape= instead of dims= for numpyro compatibility
             sigma_goalie = pm.HalfNormal("sigma_goalie", sigma=1)
-            sigma_team = pm.HalfNormal("sigma_team", sigma=1)
+            sigma_team_season = pm.HalfNormal("sigma_team_season", sigma=1)
             sigma_season = pm.HalfNormal("sigma_season", sigma=1)
             
             z_goalie = pm.Normal("z_goalie", mu=0, sigma=1, shape=n_goalies)
-            z_team = pm.Normal("z_team", mu=0, sigma=1, shape=n_teams)
+            z_team_season = pm.Normal("z_team_season", mu=0, sigma=1, shape=n_team_seasons)
             z_season = pm.Normal("z_season", mu=0, sigma=1, shape=n_seasons)
             
             goalie_effect = pm.Deterministic("goalie_effect", z_goalie * sigma_goalie)
-            team_effect = pm.Deterministic("team_effect", z_team * sigma_team)
+            # TIME-VARYING: each (team, season) pair gets its own defensive impact
+            team_season_effect = pm.Deterministic("team_season_effect", z_team_season * sigma_team_season)
             season_effect = pm.Deterministic("season_effect", z_season * sigma_season)
             
-            # Expected Value
+            # Expected Value — team_season_effect replaces the old static team_effect
             mu = (
                 alpha 
                 + beta_traffic * traffic 
                 + beta_speed * speed 
                 + goalie_effect[idx_goalie] 
-                + team_effect[idx_team] 
+                + team_season_effect[idx_team_season] 
                 + season_effect[idx_season]
             )
             
@@ -137,20 +145,23 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
     summary.to_parquet(output_path, index=False)
     logger.info(f"Saved DSIS goalie posteriors to {output_path}")
     
-    # Extract Team Effects
-    team_samples = trace.posterior["team_effect"].values
-    team_flat = team_samples.reshape(-1, n_teams)
-    team_means = team_flat.mean(axis=0)
-    team_stds = team_flat.std(axis=0)
+    # Extract Time-Varying Team-Season Effects
+    ts_samples = trace.posterior["team_season_effect"].values
+    ts_flat = ts_samples.reshape(-1, n_team_seasons)
+    ts_means = ts_flat.mean(axis=0)
+    ts_stds = ts_flat.std(axis=0)
     
-    team_summary = pd.DataFrame({
-        'team_id': teams,
-        'dsis_team_defense_impact_per_game': team_means,
-        'dsis_team_std': team_stds
-    })
+    # Parse the compound key back into team_id and season
+    ts_parts = pd.DataFrame({'team_season': team_seasons})
+    ts_parts[['team_id', 'season']] = ts_parts['team_season'].str.split('_', expand=True)
+    ts_parts['team_id'] = ts_parts['team_id'].astype(int)
+    ts_parts['season'] = ts_parts['season'].astype(int)
+    ts_parts['dsis_team_defense_impact_per_game'] = ts_means
+    ts_parts['dsis_team_std'] = ts_stds
+    
     team_output = str(output_path).replace('posteriors.parquet', 'team_effects.parquet')
-    team_summary.to_parquet(team_output, index=False)
-    logger.info(f"Saved DSIS team effects to {team_output}")
+    ts_parts[['team_id', 'season', 'dsis_team_defense_impact_per_game', 'dsis_team_std']].to_parquet(team_output, index=False)
+    logger.info(f"Saved DSIS time-varying team-season effects to {team_output}")
     
     # Print results
     names = {
@@ -162,15 +173,20 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
     }
     summary['Name'] = summary['goalie_id'].map(names).fillna(summary['goalie_id'].astype(str))
     
-    print("\n--- TOP 15 TRUE TALENT GOALIES (DSIS) ---")
+    print("\n--- TOP 15 TRUE TALENT GOALIES (DSIS v2 — Time-Varying Team Effects) ---")
     print(summary.head(15)[['Name', 'dsis_true_talent_gsax_per_game', 'dsis_std_dev', 'dsis_hdi_lower', 'dsis_hdi_upper']].to_string(index=False))
     
-    print("\n--- TOP 5 DEFENSIVE SYSTEMS ---")
-    team_summary_sorted = team_summary.sort_values('dsis_team_defense_impact_per_game', ascending=False)
-    print(team_summary_sorted.head(5).to_string(index=False))
+    # Show Rangers specifically across seasons
+    rangers = ts_parts[ts_parts['team_id'] == 3].sort_values('season')
+    if len(rangers) > 0:
+        print("\n--- NY RANGERS DEFENSIVE IMPACT BY SEASON ---")
+        print(rangers[['season', 'dsis_team_defense_impact_per_game']].to_string(index=False))
     
-    print("\n--- BOTTOM 5 DEFENSIVE SYSTEMS ---")
-    print(team_summary_sorted.tail(5).to_string(index=False))
+    # Show Tampa specifically
+    tampa = ts_parts[ts_parts['team_id'] == 14].sort_values('season')
+    if len(tampa) > 0:
+        print("\n--- TAMPA BAY DEFENSIVE IMPACT BY SEASON ---")
+        print(tampa[['season', 'dsis_team_defense_impact_per_game']].to_string(index=False))
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
