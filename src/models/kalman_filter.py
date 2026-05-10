@@ -68,7 +68,7 @@ def run_kalman_projections(
         # Observations: Seasonal True Talent (DSIS-Isolated GSAx 2.0 per Game)
         measurements = goalie_data['seasonal_true_talent'].values
         ages = goalie_data['exact_age'].values
-        games = goalie_data['est_games'].values
+        games = goalie_data['games_played'].values  # Actual GP from COUNT(DISTINCT game_id)
         n_timesteps = len(ages)
         
         # --- Age Curve Drift (time-varying transition offset) ---

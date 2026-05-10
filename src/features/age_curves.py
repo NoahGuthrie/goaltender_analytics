@@ -121,17 +121,19 @@ def calculate_age_curves(
     
     # Group by goalie + defending team + season
     # team_id = defending team (goalie's team)
+    # ACTUAL GP via COUNT(DISTINCT game_id) — no more estimating
     query = f"""
     SELECT 
         goalie_in_net_id as goalie_id,
         CASE WHEN event_owner_team_id = home_team_id THEN away_team_id ELSE home_team_id END as team_id,
         season,
         COUNT(*) as shots_faced,
+        COUNT(DISTINCT game_id) as games_played,
         SUM(xg_prob) - SUM(is_goal) as raw_gsax_2_0
     FROM '{scored_data_path}'
     WHERE goalie_in_net_id IS NOT NULL AND is_empty_net = 0
     GROUP BY 1, 2, 3
-    HAVING COUNT(*) > 200
+    HAVING COUNT(DISTINCT game_id) >= 10
     """
     seasonal_df = conn.execute(query).df()
     
@@ -150,9 +152,8 @@ def calculate_age_curves(
         logger.warning("DSIS Team Effects not found! Using raw GSAx 2.0 without team isolation.")
         seasonal_df['dsis_team_defense_impact_per_game'] = 0
     
-    # Approximate games played (avg ~30 shots per game)
-    seasonal_df['est_games'] = seasonal_df['shots_faced'] / 30.0
-    seasonal_df['raw_gsax_per_game'] = seasonal_df['raw_gsax_2_0'] / seasonal_df['est_games']
+    # Per-game GSAx using ACTUAL games played
+    seasonal_df['raw_gsax_per_game'] = seasonal_df['raw_gsax_2_0'] / seasonal_df['games_played']
     
     # Seasonal True Talent = Raw GSAx/Game - Team Defensive Impact
     # This isolates the goalie's individual contribution
