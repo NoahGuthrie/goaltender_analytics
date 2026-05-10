@@ -36,11 +36,19 @@ def score_dataset(
     # Get probabilities for class 1 (is_goal)
     df['xg_prob'] = clf.predict_proba(X)[:, 1]
     
+    logger.info("Applying seasonal calibration (SUM(xG) = SUM(Goals) per season)...")
+    season_calib = df.groupby('season').apply(lambda x: x['is_goal'].sum() / x['xg_prob'].sum()).reset_index()
+    season_calib.columns = ['season', 'calib_factor']
+    
+    df = df.merge(season_calib, on='season', how='left')
+    df['xg_prob'] = df['xg_prob'] * df['calib_factor']
+    df = df.drop(columns=['calib_factor'])
+    
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_path, engine='pyarrow', index=False)
     
-    logger.info(f"Saved scored dataset to {output_path}")
-    logger.info(f"Average xG: {df['xg_prob'].mean():.4f} | Actual Goal Rate: {df['is_goal'].mean():.4f}")
+    logger.info(f"Saved calibrated scored dataset to {output_path}")
+    logger.info(f"Calibrated Average xG: {df['xg_prob'].mean():.4f} | Actual Goal Rate: {df['is_goal'].mean():.4f}")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
