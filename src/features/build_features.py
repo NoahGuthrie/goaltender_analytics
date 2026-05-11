@@ -105,8 +105,14 @@ def build_xg_features(db_path="data/goaltender_analytics.duckdb", output_path="d
     logger.info(f"Extracted {len(df)} shots. Computing mathematical features...")
     
     df['net_x'] = df['net_x'].fillna(89) 
-    df['shot_distance'] = np.sqrt((df['net_x'] - df['x_coord'])**2 + df['y_coord']**2)
-    df['shot_angle'] = np.where(df['shot_distance'] > 0, np.abs(np.arcsin(df['y_coord'] / df['shot_distance'])) * 180 / np.pi, 0)
+    
+    # Standardize to attacking half (goal is always at x=89, y=0)
+    df['adjusted_x'] = np.where(df['net_x'] == 89, df['x_coord'], -df['x_coord'])
+    df['adjusted_y'] = np.where(df['net_x'] == 89, df['y_coord'], -df['y_coord'])
+    
+    df['shot_distance'] = np.sqrt((89 - df['adjusted_x'])**2 + df['adjusted_y']**2)
+    # Signed angle: 0 is directly in front, + is right side, - is left side, >90 is behind the net
+    df['shot_angle'] = np.where(df['shot_distance'] > 0, np.arctan2(df['adjusted_y'], 89 - df['adjusted_x']) * 180 / np.pi, 0)
                                 
     df['time_since_last_event'] = df['time_seconds'] - df['prev_time_seconds']
     df['time_since_last_stoppage'] = df['time_seconds'] - df['last_stoppage_time']
@@ -117,9 +123,14 @@ def build_xg_features(db_path="data/goaltender_analytics.duckdb", output_path="d
     df['prev_x'] = df['prev_x'].fillna(89).astype(float) # Default prev location to net to avoid NA math
     df['prev_y'] = df['prev_y'].fillna(0).astype(float)
     
-    # New final features
-    df['prev_distance'] = np.sqrt((df['net_x'] - df['prev_x'])**2 + df['prev_y']**2)
-    df['prev_angle'] = np.where(df['prev_distance'] > 0, np.abs(np.arcsin(df['prev_y'] / df['prev_distance'])) * 180 / np.pi, 0)
+    # Standardize previous locations
+    df['prev_adjusted_x'] = np.where(df['net_x'] == 89, df['prev_x'], -df['prev_x'])
+    df['prev_adjusted_y'] = np.where(df['net_x'] == 89, df['prev_y'], -df['prev_y'])
+    
+    df['prev_distance'] = np.sqrt((89 - df['prev_adjusted_x'])**2 + df['prev_adjusted_y']**2)
+    df['prev_angle'] = np.where(df['prev_distance'] > 0, np.arctan2(df['prev_adjusted_y'], 89 - df['prev_adjusted_x']) * 180 / np.pi, 0)
+    
+    # Delta angle: properly accounts for cross-ice movement because angles are signed
     df['delta_angle'] = np.abs(df['shot_angle'] - df['prev_angle']).fillna(0)
     
     df['distance_from_prev'] = np.sqrt((df['x_coord'] - df['prev_x'])**2 + (df['y_coord'] - df['prev_y'])**2)
@@ -173,7 +184,8 @@ def build_xg_features(db_path="data/goaltender_analytics.duckdb", output_path="d
     
     df['is_goal'] = (df['event_type'] == 'goal').astype(int)
     
-    df = df[(df['is_empty_net'] == 1) | (df['goalie_in_net_id'].notna())]
+    # Drop empty net goals completely from training/evaluation data
+    df = df[(df['is_empty_net'] == 0) & (df['goalie_in_net_id'].notna())]
     
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_path, engine='pyarrow', index=False)

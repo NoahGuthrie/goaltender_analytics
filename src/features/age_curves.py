@@ -143,21 +143,20 @@ def calculate_age_curves(
         dsis_teams = pd.read_parquet(team_effects_path)
         # Merge on BOTH team_id AND season for time-varying effects
         seasonal_df = seasonal_df.merge(
-            dsis_teams[['team_id', 'season', 'dsis_team_defense_impact_per_game']], 
+            dsis_teams[['team_id', 'season', 'dsis_team_defense_impact_per_shot']], 
             on=['team_id', 'season'], how='left'
         )
-        seasonal_df['dsis_team_defense_impact_per_game'] = seasonal_df['dsis_team_defense_impact_per_game'].fillna(0)
+        seasonal_df['dsis_team_defense_impact_per_shot'] = seasonal_df['dsis_team_defense_impact_per_shot'].fillna(0)
         logger.info("Successfully merged time-varying DSIS Team-Season Effects for True Talent isolation.")
     except FileNotFoundError:
         logger.warning("DSIS Team Effects not found! Using raw GSAx 2.0 without team isolation.")
-        seasonal_df['dsis_team_defense_impact_per_game'] = 0
+        seasonal_df['dsis_team_defense_impact_per_shot'] = 0
     
-    # Per-game GSAx using ACTUAL games played
-    seasonal_df['raw_gsax_per_game'] = seasonal_df['raw_gsax_2_0'] / seasonal_df['games_played']
+    # Per-shot GSAx
+    seasonal_df['raw_gsax_per_shot'] = seasonal_df['raw_gsax_2_0'] / seasonal_df['shots_faced']
     
-    # Seasonal True Talent = Raw GSAx/Game - Team Defensive Impact
-    # This isolates the goalie's individual contribution
-    seasonal_df['seasonal_true_talent'] = seasonal_df['raw_gsax_per_game'] - seasonal_df['dsis_team_defense_impact_per_game']
+    # Seasonal True Talent (Per Shot) = Raw GSAx/Shot - Team Defensive Impact/Shot
+    seasonal_df['seasonal_true_talent'] = seasonal_df['raw_gsax_per_shot'] - seasonal_df['dsis_team_defense_impact_per_shot']
     
     # Merge DOB
     seasonal_df = seasonal_df.merge(dob_df, on='goalie_id', how='inner')
@@ -204,7 +203,7 @@ def calculate_age_curves(
     sample_ages = [22.0, 25.0, 27.0, 28.0, 30.0, 33.0, 35.0, 38.0]
     for a in sample_ages:
         row = drift_df[drift_df['age'] == a].iloc[0]
-        print(f"  Age {a:4.0f}: Expected Talent = {row['expected_true_talent']:+.3f} | Yearly Drift = {row['yearly_drift']:+.4f} GSAx/Game")
+        print(f"  Age {a:4.0f}: Expected Talent = {row['expected_true_talent']:+.4f} | Yearly Drift = {row['yearly_drift']:+.5f} GSAx/Shot")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")

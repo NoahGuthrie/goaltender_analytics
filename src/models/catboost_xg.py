@@ -21,7 +21,7 @@ def train_catboost(data_path="data/processed/xg_features.parquet", model_dir="da
         logger.warning("Not enough data to train effectively. Need more than 50 rows.")
         
     features = [
-        'shot_distance', 'shot_angle', 'shot_type', 'is_empty_net',
+        'adjusted_x', 'adjusted_y', 'shot_distance', 'shot_angle', 'shot_type', 
         'time_since_last_event', 'prev_event_type', 'sequence_2_events',
         'shot_sequence_num', 'traffic_density', 'royal_road_cross',
         'time_since_last_stoppage', 'strength_state',
@@ -39,55 +39,55 @@ def train_catboost(data_path="data/processed/xg_features.parquet", model_dir="da
     X = df[features]
     y = df[target]
     
-    # Due to small sample size for the smoke test, we'll do a simple train/test split.
-    # In full production, this would be GroupKFold by 'season' for Leave-One-Season-Out (LOSO).
-    from sklearn.model_selection import train_test_split
-    stratify = y if y.sum() >= 2 and (len(y) - y.sum()) >= 2 else None
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=stratify)
+    logger.info("Implementing Leave-One-Season-Out (LOSO) Cross-Validation...")
     
-    logger.info("Training CatBoost Context-Enriched model...")
+    from sklearn.model_selection import GroupKFold
+    
+    # We will do 5-fold grouped by season to save time, but it evaluates unseen seasons
+    gkf = GroupKFold(n_splits=min(5, df['season'].nunique()))
+    
+    oof_preds = np.zeros(len(df))
+    models = []
     
     # Load tuned parameters if they exist
     import json
     params_path = Path("data/models/tune/best_catboost_params.json")
     if params_path.exists():
-        logger.info(f"Loading tuned parameters from {params_path}")
         with open(params_path, 'r') as f:
             best_params = json.load(f)
-        clf = CatBoostClassifier(
-            iterations=500,
-            auto_class_weights='Balanced',
-            cat_features=cat_features,
-            verbose=100,
-            random_state=42,
-            **best_params
-        )
+        model_params = {**best_params, 'iterations': 500, 'cat_features': cat_features, 'verbose': 100, 'random_state': 42}
     else:
-        logger.info("Using default parameters...")
-        clf = CatBoostClassifier(
-            iterations=500,
-            depth=6,
-            learning_rate=0.05,
-            cat_features=cat_features,
-            auto_class_weights='Balanced',
-            verbose=100,
-            random_state=42
-        )
+        model_params = {'iterations': 500, 'depth': 6, 'learning_rate': 0.05, 'cat_features': cat_features, 'verbose': 100, 'random_state': 42}
+
+    for fold, (train_idx, val_idx) in enumerate(gkf.split(X, y, groups=df['season'])):
+        logger.info(f"--- Training Fold {fold+1} ---")
+        X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
+        X_val, y_val = X.iloc[val_idx], y.iloc[val_idx]
+        
+        clf = CatBoostClassifier(**model_params)
+        clf.fit(X_train, y_train, eval_set=(X_val, y_val), early_stopping_rounds=50, verbose=False)
+        
+        oof_preds[val_idx] = clf.predict_proba(X_val)[:, 1]
+        models.append(clf)
+        
+    logger.info("Evaluating LOSO out-of-fold predictions...")
+    metrics = evaluate_model(y, oof_preds, model_name="CatBoost_ContextEnriched_LOSO")
     
-    clf.fit(X_train, y_train, eval_set=(X_test, y_test), early_stopping_rounds=50)
-    
-    logger.info("Evaluating CatBoost model...")
-    y_prob = clf.predict_proba(X_test)[:, 1]
-    metrics = evaluate_model(y_test, y_prob, model_name="CatBoost_ContextEnriched")
+    # Train final model on ALL data
+    logger.info("Training final model on full dataset...")
+    clf = CatBoostClassifier(**model_params)
+    clf.fit(X, y, verbose=False)
     
     # SHAP values (CatBoost supports SHAP natively but we need the raw model)
     try:
         logger.info("Generating SHAP summary plot...")
+        # SHAP on a subsample of full data
         explainer = shap.TreeExplainer(clf)
-        shap_values = explainer.shap_values(X_test)
+        X_sample = X.sample(n=min(10000, len(X)), random_state=42)
+        shap_values = explainer.shap_values(X_sample)
         
         plt.figure(figsize=(10, 8))
-        shap.summary_plot(shap_values, X_test, show=False)
+        shap.summary_plot(shap_values, X_sample, show=False)
         plt.savefig(Path(model_dir) / 'eval' / 'catboost_shap_summary.png', bbox_inches='tight')
         plt.close()
     except Exception as e:

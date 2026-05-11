@@ -17,7 +17,7 @@ def score_dataset(
     clf = joblib.load(model_path)
     
     features = [
-        'shot_distance', 'shot_angle', 'shot_type', 'is_empty_net',
+        'adjusted_x', 'adjusted_y', 'shot_distance', 'shot_angle', 'shot_type', 
         'time_since_last_event', 'prev_event_type', 'sequence_2_events',
         'shot_sequence_num', 'traffic_density', 'royal_road_cross',
         'time_since_last_stoppage', 'strength_state',

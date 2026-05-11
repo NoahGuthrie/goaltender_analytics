@@ -29,7 +29,7 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
         season,
         game_id,
         COUNT(*) as shots_faced,
-        SUM(xg_prob) - SUM(is_goal) as game_gsax,
+        (SUM(xg_prob) - SUM(is_goal)) / COUNT(*) as gsax_per_shot,
         AVG(traffic_density) as avg_traffic,
         AVG(puck_speed) as avg_speed
     FROM '{scored_data_path}'
@@ -112,8 +112,10 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
                 + season_effect[idx_season]
             )
             
-            sigma_eps = pm.HalfNormal("sigma_eps", sigma=2)
-            likelihood = pm.Normal("likelihood", mu=mu, sigma=sigma_eps, observed=df['game_gsax'].values)
+            sigma_eps = pm.HalfNormal("sigma_eps", sigma=1)
+            # Variance scaling: σ_obs = σ_eps / √shots_faced
+            # This correctly accounts for the Central Limit Theorem in per-shot rates
+            likelihood = pm.Normal("likelihood", mu=mu, sigma=sigma_eps / pm.math.sqrt(df['shots_faced'].values), observed=df['gsax_per_shot'].values)
             
             logger.info("Starting MCMC Sampling with Numpyro (JAX backend)...")
             trace = pm.sample(draws=1000, tune=1000, chains=2, cores=1, 
@@ -131,12 +133,12 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
     
     summary = pd.DataFrame({
         'goalie_id': goalies,
-        'dsis_true_talent_gsax_per_game': goalie_means,
+        'dsis_true_talent_gsax_per_shot': goalie_means,
         'dsis_std_dev': goalie_stds,
         'dsis_hdi_lower': goalie_means - (1.96 * goalie_stds),
         'dsis_hdi_upper': goalie_means + (1.96 * goalie_stds)
     })
-    summary = summary.sort_values('dsis_true_talent_gsax_per_game', ascending=False)
+    summary = summary.sort_values('dsis_true_talent_gsax_per_shot', ascending=False)
     
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     summary.to_parquet(output_path, index=False)
@@ -152,31 +154,29 @@ def run_dsis_model(scored_data_path="data/processed/scored_shots.parquet", outpu
     ts_parts[['team_id', 'season']] = ts_parts['team_season'].str.split('_', expand=True)
     ts_parts['team_id'] = ts_parts['team_id'].astype(int)
     ts_parts['season'] = ts_parts['season'].astype(int)
-    ts_parts['dsis_team_defense_impact_per_game'] = ts_means
+    ts_parts['dsis_team_defense_impact_per_shot'] = ts_means
     ts_parts['dsis_team_std'] = ts_stds
     
     team_output = str(output_path).replace('posteriors.parquet', 'team_effects.parquet')
-    ts_parts[['team_id', 'season', 'dsis_team_defense_impact_per_game', 'dsis_team_std']].to_parquet(team_output, index=False)
+    ts_parts[['team_id', 'season', 'dsis_team_defense_impact_per_shot', 'dsis_team_std']].to_parquet(team_output, index=False)
     logger.info(f"Saved DSIS team-season effects to {team_output}")
     
     # --- Print Results ---
-    names = {
-        8478048: "Shesterkin", 8476883: "Vasilevskiy", 8479979: "Oettinger",
-        8476945: "Hellebuyck", 8471679: "Price", 8470657: "Lundqvist",
-        8476412: "Gibson", 8475683: "Bobrovsky", 8477424: "Ullmark",
-        8477967: "Demko", 8480313: "Skinner", 8475883: "Andersen",
-        8480382: "Sorokin", 8478024: "Swayman", 8478007: "Saros",
-    }
-    summary['Name'] = summary['goalie_id'].map(names).fillna(summary['goalie_id'].astype(str))
+    map_path = "data/processed/goalie_map.parquet"
+    if Path(map_path).exists():
+        name_map = pd.read_parquet(map_path).set_index('goalie_id')['goalie_name'].to_dict()
+        summary['Name'] = summary['goalie_id'].map(name_map).fillna(summary['goalie_id'].astype(str))
+    else:
+        summary['Name'] = summary['goalie_id'].astype(str)
     
     print("\n--- TOP 15 TRUE TALENT GOALIES (DSIS v2 — Game-Level, Time-Varying) ---")
-    print(summary.head(15)[['Name', 'dsis_true_talent_gsax_per_game', 'dsis_std_dev', 'dsis_hdi_lower', 'dsis_hdi_upper']].to_string(index=False))
+    print(summary.head(15)[['Name', 'dsis_true_talent_gsax_per_shot', 'dsis_std_dev', 'dsis_hdi_lower', 'dsis_hdi_upper']].to_string(index=False))
     
     # Show Rangers by season
     rangers = ts_parts[ts_parts['team_id'] == 3].sort_values('season')
     if len(rangers) > 0:
         print("\n--- NY RANGERS DEFENSIVE IMPACT BY SEASON ---")
-        print(rangers[['season', 'dsis_team_defense_impact_per_game']].to_string(index=False))
+        print(rangers[['season', 'dsis_team_defense_impact_per_shot']].to_string(index=False))
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")

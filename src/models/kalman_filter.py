@@ -7,23 +7,8 @@ from scipy.interpolate import interp1d
 
 logger = logging.getLogger(__name__)
 
-# Name mapping for readable output
-GOALIE_NAMES = {
-    8478048: "Igor Shesterkin", 8476883: "Andrei Vasilevskiy", 8479979: "Jake Oettinger",
-    8476945: "Connor Hellebuyck", 8471679: "Carey Price", 8470657: "Henrik Lundqvist",
-    8476412: "John Gibson", 8475683: "Sergei Bobrovsky", 8477424: "Linus Ullmark",
-    8478406: "Mackenzie Blackwood", 8477967: "Thatcher Demko", 8480947: "Adin Hill",
-    8480313: "Stuart Skinner", 8482137: "Pyotr Kochetkov", 8475883: "Frederik Andersen",
-    8476999: "Jonathan Quick", 8481020: "Filip Gustavsson", 8484170: "Justus Annunen",
-    8476932: "Semyon Varlamov", 8480382: "Ilya Sorokin", 8483532: "Samuel Ersson",
-    8476899: "Joonas Korpisalo", 8480843: "Ilya Samsonov", 8475660: "Marc-Andre Fleury",
-    8478024: "Jeremy Swayman", 8478007: "Juuse Saros", 8475831: "Jacob Markstrom",
-    8478492: "Alexandar Georgiev", 8479292: "Darcy Kuemper", 8471695: "Jaroslav Halak",
-    8476434: "Cam Talbot", 8480280: "Dustin Wolf",
-}
-
-# Reference: A starter plays ~55-65 games per season ≈ ~1700-1900 shots faced
-REFERENCE_GAMES = 55  # What we consider a "full season" for measurement noise scaling
+# Reference: A starter faces ~1700-1900 shots per season
+REFERENCE_SHOTS = 1800  # What we consider a "full season" for measurement noise scaling
 
 def run_kalman_projections(
     ages_path="data/processed/goalie_ages.parquet",
@@ -45,17 +30,17 @@ def run_kalman_projections(
     # Create the drift lookup function
     drift_func = interp1d(drift_df['age'], drift_df['yearly_drift'], kind='linear', fill_value='extrapolate')
     
-    # --- GLOBAL PARAMETERS ---
+    # --- GLOBAL PARAMETERS (Scaled for GSAx/Shot) ---
     # Process noise: how much can true talent genuinely change year-over-year?
-    # Estimated from empirical career volatility. Goalies don't change drastically.
-    PROCESS_NOISE = 0.01  
+    # Scale: (0.01 / 30)^2 ≈ 0.00001
+    PROCESS_NOISE = 0.00001  
     
-    # Base measurement noise for a full-season starter (55+ games)
-    # Higher value = model trusts the observation less
-    BASE_MEASUREMENT_NOISE = 0.04
+    # Base measurement noise for a full-season starter (1800+ shots)
+    # Scale: (0.04 / 900) ≈ 0.00004
+    BASE_MEASUREMENT_NOISE = 0.00004
     
     # Initial state covariance: high uncertainty for rookies
-    INITIAL_STATE_COVARIANCE = [[1.0]]
+    INITIAL_STATE_COVARIANCE = [[0.001]]
     
     results = []
     career_trajectories = []  # For visualization
@@ -65,10 +50,10 @@ def run_kalman_projections(
     for goalie_id in valid_goalies:
         goalie_data = df[df['goalie_id'] == goalie_id].copy()
         
-        # Observations: Seasonal True Talent (DSIS-Isolated GSAx 2.0 per Game)
+        # Observations: Seasonal True Talent (DSIS-Isolated GSAx 2.0 per Shot)
         measurements = goalie_data['seasonal_true_talent'].values
         ages = goalie_data['exact_age'].values
-        games = goalie_data['games_played'].values  # Actual GP from COUNT(DISTINCT game_id)
+        shots = goalie_data['shots_faced'].values  # Precision shrinkage using actual shots faced
         n_timesteps = len(ages)
         
         # --- Age Curve Drift (time-varying transition offset) ---
@@ -78,14 +63,13 @@ def run_kalman_projections(
             yearly_rate = drift_func(ages[i-1])
             transition_offsets[i, 0] = yearly_rate * age_diff
         
-        # --- Games Played Shrinkage (time-varying observation covariance) ---
-        # A starter who plays 55 games gets the base noise.
-        # A backup who plays 15 games gets 55/15 = 3.67x more noise.
+        # --- Shots Faced Shrinkage (time-varying observation covariance) ---
+        # A starter who faces 1800 shots gets the base noise.
         # This forces the filter to DISTRUST short-sample hot streaks.
         observation_covariances = np.zeros((n_timesteps, 1, 1))
         for i in range(n_timesteps):
-            games_weight = max(REFERENCE_GAMES / max(games[i], 1), 1.0)
-            observation_covariances[i, 0, 0] = BASE_MEASUREMENT_NOISE * games_weight
+            shots_weight = max(REFERENCE_SHOTS / max(shots[i], 1), 1.0)
+            observation_covariances[i, 0, 0] = BASE_MEASUREMENT_NOISE * shots_weight
         
         kf = KalmanFilter(
             transition_matrices=[[1.0]],
@@ -106,7 +90,7 @@ def run_kalman_projections(
                 'goalie_id': goalie_id,
                 'season': goalie_data.iloc[i]['season'],
                 'age': ages[i],
-                'games_played': games[i],
+                'shots_faced': shots[i],
                 'observed_talent': measurements[i],
                 'kalman_talent': filtered_state_means[i, 0],
                 'kalman_uncertainty': np.sqrt(filtered_state_covariances[i, 0, 0])
@@ -116,7 +100,7 @@ def run_kalman_projections(
         last_mean = filtered_state_means[-1, 0]
         last_cov = filtered_state_covariances[-1, 0, 0]
         last_age = ages[-1]
-        last_games = games[-1]
+        last_shots = shots[-1]
         
         # 1-Year Projection
         drift_1yr = drift_func(last_age)
@@ -132,20 +116,26 @@ def run_kalman_projections(
             'goalie_id': goalie_id,
             'latest_season': goalie_data.iloc[-1]['season'],
             'current_age': round(last_age, 1),
-            'latest_games_played': round(last_games, 0),
-            'current_filtered_talent': round(last_mean, 4),
-            'current_uncertainty': round(np.sqrt(last_cov), 4),
-            'proj_1yr_talent': round(proj_1yr_mean, 4),
-            'proj_1yr_ci_lower': round(proj_1yr_mean - 1.28 * np.sqrt(proj_1yr_cov), 4),  # 80% CI
-            'proj_1yr_ci_upper': round(proj_1yr_mean + 1.28 * np.sqrt(proj_1yr_cov), 4),
-            'proj_3yr_talent': round(proj_3yr_mean, 4),
-            'proj_3yr_ci_lower': round(proj_3yr_mean - 1.28 * np.sqrt(proj_3yr_cov), 4),
-            'proj_3yr_ci_upper': round(proj_3yr_mean + 1.28 * np.sqrt(proj_3yr_cov), 4),
+            'latest_shots_faced': int(shots[-1]),
+            'current_filtered_talent_per_shot': round(last_mean, 6),
+            'current_uncertainty': round(np.sqrt(last_cov), 6),
+            'proj_1yr_talent_per_shot': round(proj_1yr_mean, 6),
+            'proj_1yr_ci_lower': round(proj_1yr_mean - 1.28 * np.sqrt(proj_1yr_cov), 6),  # 80% CI
+            'proj_1yr_ci_upper': round(proj_1yr_mean + 1.28 * np.sqrt(proj_1yr_cov), 6),
+            'proj_3yr_talent_per_shot': round(proj_3yr_mean, 6),
         })
     
     proj_df = pd.DataFrame(results)
-    proj_df['Goalie'] = proj_df['goalie_id'].map(GOALIE_NAMES).fillna(proj_df['goalie_id'].astype(str))
-    proj_df = proj_df.sort_values('proj_1yr_talent', ascending=False)
+    
+    # Load Name Map
+    map_path = "data/processed/goalie_map.parquet"
+    if Path(map_path).exists():
+        name_map = pd.read_parquet(map_path).set_index('goalie_id')['goalie_name'].to_dict()
+        proj_df['Goalie'] = proj_df['goalie_id'].map(name_map).fillna(proj_df['goalie_id'].astype(str))
+    else:
+        proj_df['Goalie'] = proj_df['goalie_id'].astype(str)
+        
+    proj_df = proj_df.sort_values('proj_1yr_talent_per_shot', ascending=False)
     
     # Save trajectories
     traj_df = pd.DataFrame(career_trajectories)
@@ -163,15 +153,19 @@ def run_kalman_projections(
     print("="*80)
     
     active = proj_df[proj_df['latest_season'] == 20252026].copy()
-    active = active.sort_values('proj_1yr_talent', ascending=False)
+    active = active.sort_values('proj_1yr_talent_per_shot', ascending=False)
     
-    print(f"\n{'Rank':<5} {'Goalie':<22} {'Age':<5} {'GP':<5} {'Current':<9} {'Proj 1Y':<9} {'80% CI':<18} {'Proj 3Y':<9}")
+    print(f"\n{'Rank':<5} {'Goalie':<22} {'Age':<5} {'Shots':<6} {'Current':<9} {'Proj 1Y':<9} {'80% CI (Per Game)':<20}")
     print("-" * 85)
     
     for i, (_, row) in enumerate(active.head(15).iterrows(), 1):
-        ci = f"[{row['proj_1yr_ci_lower']:+.3f}, {row['proj_1yr_ci_upper']:+.3f}]"
-        print(f"{i:<5} {row['Goalie']:<22} {row['current_age']:<5.0f} {row['latest_games_played']:<5.0f} "
-              f"{row['current_filtered_talent']:+.4f}  {row['proj_1yr_talent']:+.4f}  {ci:<18} {row['proj_3yr_talent']:+.4f}")
+        # Convert to standardized per-game (x30 shots) for human readability
+        current_pg = row['current_filtered_talent_per_shot'] * 30
+        proj_pg = row['proj_1yr_talent_per_shot'] * 30
+        ci_pg = f"[{row['proj_1yr_ci_lower']*30:+.3f}, {row['proj_1yr_ci_upper']*30:+.3f}]"
+        
+        print(f"{i:<5} {row['Goalie']:<22} {row['current_age']:<5.0f} {row['latest_shots_faced']:<6} "
+              f"{current_pg:+.4f}  {proj_pg:+.4f}  {ci_pg:<20}")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
