@@ -296,7 +296,7 @@ function drawShotMap(shots) {
   // Crease (semicircle, 6ft radius in front of net)
   const creaseR = Math.abs(xS(89) - xS(83));
   g.append("path")
-    .attr("d", d3.arc()({ innerRadius: 0, outerRadius: creaseR, startAngle: -Math.PI / 2, endAngle: Math.PI / 2 }))
+    .attr("d", d3.arc()({ innerRadius: 0, outerRadius: creaseR, startAngle: -Math.PI, endAngle: 0 }))
     .attr("transform", "translate(" + xS(89) + "," + yS(0) + ")")
     .attr("fill", "rgba(173, 216, 230, 0.15)").attr("stroke", "#e74c3c").attr("stroke-width", 1);
 
