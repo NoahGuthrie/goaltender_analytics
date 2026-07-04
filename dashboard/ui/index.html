@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSAx 2.0 — Goaltender Analytics</title>
+    <meta name="description" content="Context-enriched goaltender analytics. Isolating talent from team defense since 2007.">
+    <link rel="stylesheet" href="/ui/style.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <div class="brand">
+                <a href="#leaderboard" class="brand-link">GSAx 2.0</a>
+                <span class="brand-sub">Goaltender Analytics</span>
+            </div>
+            <nav>
+                <a href="#leaderboard" class="nav-link active">Leaderboard</a>
+                <a href="#projections" class="nav-link">Projections</a>
+                <a href="#head2head" class="nav-link">Head-to-Head</a>
+                <a href="#defense-impact" class="nav-link">Team Defense</a>
+            </nav>
+        </div>
+    </header>
+    <main id="main-content">
+        <p class="muted" style="padding:3rem;text-align:center">Loading…</p>
+    </main>
+    <footer>
+        <div class="footer-inner">
+            Data: NHL Play-by-Play API, 2007–2026 &middot; Model: CatBoost + PyMC DSIS + Kalman Filter
+        </div>
+    </footer>
+    <script src="/ui/main.js"></script>
+</body>
+</html>

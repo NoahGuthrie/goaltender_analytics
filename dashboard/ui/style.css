@@ -1,0 +1,253 @@
+/* ── GSAx 2.0 — Stylesheet ─────────────────────────────── */
+
+:root {
+  --bg:       #fff;
+  --bg-alt:   #f5f5f5;
+  --border:   #ddd;
+  --text:     #222;
+  --muted:    #777;
+  --link:     #1a5276;
+  --pos:      #1e8449;
+  --neg:      #c0392b;
+  --header-bg:#1b2631;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+
+header {
+  background: var(--header-bg);
+  color: #eee;
+  border-bottom: 2px solid #d4ac0d;
+}
+.header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand { display: flex; align-items: baseline; gap: .6rem; }
+.brand-link {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #fff;
+  text-decoration: none;
+  letter-spacing: .5px;
+}
+.brand-sub {
+  font-size: .8rem;
+  color: #aab;
+  font-weight: 400;
+}
+nav { display: flex; gap: .25rem; }
+.nav-link {
+  color: #ccc;
+  text-decoration: none;
+  padding: .4rem .75rem;
+  font-size: .85rem;
+  border-radius: 3px;
+}
+.nav-link:hover { color: #fff; background: rgba(255,255,255,.08); }
+.nav-link.active { color: #fff; background: rgba(255,255,255,.14); }
+
+/* ── Main ────────────────────────────────────────────────── */
+
+main {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+
+footer {
+  border-top: 1px solid var(--border);
+  background: var(--bg-alt);
+}
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: .75rem 1.5rem;
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+/* ── Typography ──────────────────────────────────────────── */
+
+h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: .25rem; }
+h3 { font-size: 1rem; font-weight: 600; margin-bottom: .5rem; }
+.muted { color: var(--muted); }
+.pos { color: var(--pos); }
+.neg { color: var(--neg); }
+.bold { font-weight: 600; }
+.mono { font-family: "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: .85em; }
+.right { text-align: right; }
+.subtitle { color: var(--muted); font-size: .85rem; margin-bottom: 1.25rem; }
+
+/* ── Filters ─────────────────────────────────────────────── */
+
+.filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.filter-item { display: flex; flex-direction: column; gap: .15rem; }
+.filter-item label { font-size: .75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.filter-item select,
+.filter-item input {
+  padding: .35rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: .85rem;
+  background: #fff;
+}
+.filter-count { font-size: .8rem; color: var(--muted); margin-left: auto; align-self: flex-end; padding-bottom: .35rem; }
+
+/* ── Tables ──────────────────────────────────────────────── */
+
+.tbl-wrap {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+thead th {
+  background: var(--bg-alt);
+  padding: .5rem .75rem;
+  font-size: .75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+thead th:hover { color: var(--text); }
+thead th.sorted { color: var(--text); }
+thead th .arrow { font-size: .65rem; margin-left: .2rem; }
+tbody td {
+  padding: .45rem .75rem;
+  border-bottom: 1px solid #eee;
+  font-size: .85rem;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #fafafa; }
+tbody tr[data-id] { cursor: pointer; }
+td.name-cell { font-weight: 600; }
+td.name-cell a { color: var(--link); text-decoration: none; }
+td.name-cell a:hover { text-decoration: underline; }
+
+/* ── KPI Row ─────────────────────────────────────────────── */
+
+.kpi-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.kpi {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .75rem 1rem;
+  min-width: 140px;
+  flex: 1;
+}
+.kpi-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .3px; color: var(--muted); font-weight: 600; margin-bottom: .2rem; }
+.kpi-val { font-size: 1.5rem; font-weight: 700; }
+
+/* ── Grid ────────────────────────────────────────────────── */
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* ── Panels ──────────────────────────────────────────────── */
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.panel-head {
+  background: var(--bg-alt);
+  padding: .5rem .75rem;
+  font-weight: 600;
+  font-size: .85rem;
+  border-bottom: 1px solid var(--border);
+}
+.panel-body { padding: .75rem; }
+
+/* ── Chart containers ────────────────────────────────────── */
+
+.chart-box { min-height: 260px; }
+.chart-box svg { display: block; }
+.chart-box svg text { font-family: inherit; }
+
+/* ── Detail header ───────────────────────────────────────── */
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.back-link {
+  font-size: .85rem;
+  color: var(--link);
+  text-decoration: none;
+}
+.back-link:hover { text-decoration: underline; }
+
+/* ── H2H ─────────────────────────────────────────────────── */
+
+.h2h-bar {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: 1.25rem;
+}
+.h2h-bar select {
+  padding: .35rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: .85rem;
+}
+.h2h-vs { font-weight: 700; color: var(--muted); }
+
+/* ── States ──────────────────────────────────────────────── */
+
+.state-msg {
+  padding: 2.5rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: .9rem;
+}
+.state-msg.err { color: var(--neg); }
