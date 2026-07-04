@@ -178,11 +178,30 @@ python -m src.viz.player_cards --season 2025
 - [x] Movement Demand Adjustment (MDA)
 - [x] Defensive System Impact Score (DSIS) — Bayesian hierarchical model
 - [x] Kalman filter projection system
-- [ ] Goalie player cards (static images)
-- [ ] Interactive web dashboard
+- [x] Goalie player cards (static images)
+- [x] Interactive web dashboard
 - [ ] NHL EDGE data scraper (Advanced Tracking Metrics)
 - [ ] Methodology writeups
 - [ ] Backtesting report
+
+## Dashboard
+
+The goaltender analytics platform comes with an interactive web dashboard built with a professional, clean sports-analytics theme. It allows you to:
+- Browse the full goaltender leaderboard sorted by GSAx 2.0, RCI, and DSIS talent.
+- Dig into individual goalie profiles with their historical career trajectory and a complete defensive zone shot map (tracking saves vs. goals).
+- Compare two goaltenders head-to-head.
+- Review true talent projections for the upcoming season.
+- Analyze team defensive systems (DSIS) to see which teams suppress the most expected goals.
+
+### Running the Dashboard
+
+To start the FastAPI backend server (which automatically serves the dashboard frontend):
+
+```bash
+python dashboard/api/main.py
+```
+
+Then open your browser and navigate to **http://localhost:8001**.
 
 ## Contributing
 
