@@ -221,9 +221,9 @@ def get_goalie_detail(goalie_id: int):
         "base_metrics": base_data,
         "projection": {k: (None if isinstance(v, float) and np.isnan(v) else v) for k, v in proj_data.items()},
     }
-    # Serialize with pandas to handle any remaining NaN
+    # Serialize with pandas to handle any remaining NaN without flattening nested dicts
     return Response(
-        content=pd.json_normalize([result]).to_json(orient="records")[1:-1],
+        content=pd.DataFrame([result]).to_json(orient="records")[1:-1],
         media_type="application/json",
     )
 
