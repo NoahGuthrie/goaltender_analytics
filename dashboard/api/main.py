@@ -232,20 +232,27 @@ def get_goalie_detail(goalie_id: int):
 def get_projections(
     min_shots: int = Query(0, description="Filter goalies who have faced at least this many career shots (to filter out extreme noise)"),
 ):
-    """Returns true talent projections for the upcoming season."""
+    """Returns true talent projections for the upcoming season.
+    Only includes goalies who appeared in the most recent season."""
     if not PROJ_PATH.exists():
         return Response(content="[]", media_type="application/json")
         
     proj = pd.read_parquet(PROJ_PATH)
     name_map = pd.read_parquet(MAP_PATH)
     
+    # Only keep goalies who played in the most recent season
+    c = _conn()
+    max_season = c.execute("SELECT MAX(season) FROM scored").fetchone()[0]
+    active_ids = c.execute(f"""
+        SELECT DISTINCT goalie_in_net_id AS goalie_id
+        FROM scored
+        WHERE season = {max_season}
+    """).df()
+    proj = proj[proj["goalie_id"].isin(active_ids["goalie_id"])]
+    
     # Merge names
     df = proj.merge(name_map, on="goalie_id", how="left")
     df["goalie_name"] = df["goalie_name"].fillna(df["goalie_id"].astype(str))
-    
-    # Optional: We could join with career shots to filter, but let's assume 
-    # we just send it all and let the UI handle it or do a simple join if needed.
-    # For now, just return the projections.
     
     return Response(
         content=df.to_json(orient="records", default_handler=str),
